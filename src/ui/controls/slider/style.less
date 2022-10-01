@@ -31,6 +31,8 @@
 
             &::before {
                 background-color: @slider-track-fill-color;
+                border-bottom-left-radius: @slider-track-height / 2;
+                border-top-left-radius: @slider-track-height / 2;
                 content: "";
                 height: 100%;
                 position: absolute;
@@ -49,10 +51,14 @@
         }
 
         &::before {
+            border-bottom-left-radius: @slider-track-height / 2;
+            border-top-left-radius: @slider-track-height / 2;
             right: 100%;
         }
 
         &::after {
+            border-bottom-right-radius: @slider-track-height / 2;
+            border-top-right-radius: @slider-track-height / 2;
             left: 100%;
         }
     }
@@ -65,6 +71,7 @@
 
     &__thumb {
         background-color: @slider-thumb-color;
+        border-radius: 50%;
         cursor: pointer;
         display: inline-block;
         height: @slider-thumb-size;
