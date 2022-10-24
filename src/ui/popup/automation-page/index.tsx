@@ -7,6 +7,7 @@ import type {Message} from '../../../definitions';
 import type {ViewProps} from '../types';
 import type {Automation} from 'definitions';
 import {AutomationMode} from '../../../utils/automation';
+import {isMatchMediaChangeEventListenerBuggy} from '../../../utils/platform';
 
 declare const __CHROMIUM_MV3__: boolean;
 
@@ -135,8 +136,7 @@ export default function AutomationPage(props: ViewProps) {
                 <CheckBox
                     class="automation-page__system-dark-mode__checkbox"
                     checked={isSystemAutomation}
-                    onchange={(e: {target: {checked: boolean}}) => changeAutomationMode(e.target.checked ? AutomationMode.SYSTEM : AutomationMode.NONE)}
-                />
+                    onchange={(e: {target: {checked: boolean}}) => changeAutomationMode(e.target.checked ? AutomationMode.SYSTEM : AutomationMode.NONE)}/>
                 <Button
                     class={{
                         'automation-page__system-dark-mode__button': true,
@@ -150,13 +150,17 @@ export default function AutomationPage(props: ViewProps) {
                             });
                         }
                         changeAutomationMode(isSystemAutomation ? AutomationMode.NONE : AutomationMode.SYSTEM);
-                    }}
-                >{getLocalMessage('system_dark_mode')}
-                </Button>
+                    } }
+                >{getLocalMessage('system_dark_mode')}</Button>
             </div>
             <p class="automation-page__description">
                 {getLocalMessage('system_dark_mode_description')}
             </p>
+            {!isMatchMediaChangeEventListenerBuggy ? null :
+                <p class="automation-page__warning">
+                    {getLocalMessage('system_dark_mode_chromium_warning')}
+                </p>
+            }
             <DropDown
                 onChange={(selected: any) => changeAutomationBehavior(selected)}
                 selected={props.data.settings.automation.behavior}

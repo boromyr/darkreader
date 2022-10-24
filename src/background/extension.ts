@@ -38,6 +38,7 @@ interface SystemColorState {
     wasLastColorSchemeDark: boolean | null;
 }
 
+declare const __CHROMIUM_MV2__: boolean;
 declare const __CHROMIUM_MV3__: boolean;
 declare const __THUNDERBIRD__: boolean;
 
@@ -75,7 +76,7 @@ export class Extension {
         DevTools.init(async () => this.onSettingsChanged());
         Messenger.init(this.getMessengerAdapter());
         TabManager.init({
-            getConnectionMessage: async ({url, frameURL}) => this.getConnectionMessage(url, frameURL),
+            getConnectionMessage: async (tabURL, url, isTopFrame) => this.getConnectionMessage(tabURL, url, isTopFrame),
             getTabMessage: this.getTabMessage,
             onColorSchemeChange: this.onColorSchemeChange,
         });
@@ -91,7 +92,7 @@ export class Extension {
 
         if (chrome.commands) {
             // Firefox Android does not support chrome.commands
-            chrome.commands.onCommand.addListener(async (command) => this.onCommand(command as Command));
+            chrome.commands.onCommand.addListener(async (command, {id: tabId}) => this.onCommand(command as Command, tabId, 0, undefined));
         }
 
         if (chrome.permissions.onRemoved) {
@@ -237,7 +238,7 @@ export class Extension {
             collect: async () => {
                 return await this.collectData();
             },
-            changeSettings: (settings) => this.changeSettings(settings),
+            changeSettings: async (settings) => this.changeSettings(settings),
             setTheme: (theme) => this.setTheme(theme),
             setShortcut: ({command, shortcut}) => this.setShortcut(command, shortcut),
             toggleActiveTab: async () => this.toggleActiveTab(),
@@ -253,7 +254,7 @@ export class Extension {
         };
     }
 
-    private static onCommandInternal = async (command: Command, frameURL?: string) => {
+    private static onCommandInternal = async (command: Command, tabId: number, frameId: number, frameURL: string) => {
         if (this.startBarrier.isPending()) {
             await this.startBarrier.entry();
         }
@@ -268,8 +269,31 @@ export class Extension {
                 break;
             case 'addSite': {
                 logInfo('Add Site command entered');
-                const url = frameURL || await TabManager.getActiveTabURL();
-                if (isPDF(url)) {
+                const scriptPDF = async (): Promise<boolean> => {
+                    function detectPDF(): boolean {
+                        if (document.body.childElementCount !== 1) {
+                            return false;
+                        }
+                        const {nodeName, type} = document.body.childNodes[0] as HTMLEmbedElement;
+                        return nodeName === 'EMBED' && type === 'application/pdf';
+                    }
+
+                    if (__CHROMIUM_MV3__) {
+                        return (await chrome.scripting.executeScript({
+                            target: {tabId, frameIds: [frameId]},
+                            func: detectPDF,
+                        }))[0].result;
+                    } else if (__CHROMIUM_MV2__) {
+                        return new Promise<boolean>((resolve) => chrome.tabs.executeScript(tabId, {
+                            frameId,
+                            code: `(${detectPDF.toString()})()`
+                        }, ([r]) => resolve(r)));
+                    }
+                    return false;
+                };
+
+                const pdf = async () => isPDF(frameURL || await TabManager.getActiveTabURL());
+                if (((__CHROMIUM_MV2__ || __CHROMIUM_MV3__) && await scriptPDF()) || await pdf()) {
                     this.changeSettings({enableForPDF: !UserStorage.settings.enableForPDF});
                 } else {
                     this.toggleActiveTab();
@@ -292,8 +316,8 @@ export class Extension {
     private static onCommand = debounce(75, this.onCommandInternal);
 
     private static registerContextMenus() {
-        chrome.contextMenus.onClicked.addListener(async ({menuItemId, frameUrl, pageUrl}) =>
-            this.onCommand(menuItemId as Command, frameUrl || pageUrl));
+        chrome.contextMenus.onClicked.addListener(async ({menuItemId, frameId, frameUrl, pageUrl}, {id: tabId}) =>
+            this.onCommand(menuItemId as Command, tabId, frameId, frameUrl || pageUrl));
         chrome.contextMenus.removeAll(() => {
             this.registeredContextMenus = false;
             chrome.contextMenus.create({
@@ -375,8 +399,8 @@ export class Extension {
 
     private static async getActiveTabInfo() {
         await this.loadData();
-        const url = await TabManager.getActiveTabURL();
-        const info = this.getURLInfo(url);
+        const tabURL = await TabManager.getActiveTabURL();
+        const info = this.getTabInfo(tabURL);
         info.isInjected = await TabManager.canAccessActiveTab();
         if (UserStorage.settings.detectDarkTheme) {
             info.isDarkThemeDetected = await TabManager.isActiveTabDarkThemeDetected();
@@ -384,9 +408,9 @@ export class Extension {
         return info;
     }
 
-    private static async getConnectionMessage(url: string, frameURL: string) {
+    private static async getConnectionMessage(tabURL: string, url: string, isTopFrame: boolean) {
         await this.loadData();
-        return this.getTabMessage(url, frameURL);
+        return this.getTabMessage(tabURL, url, isTopFrame);
     }
 
     private static async loadData() {
@@ -429,7 +453,8 @@ export class Extension {
         }
     };
 
-    static changeSettings($settings: Partial<UserSettings>, onlyUpdateActiveTab = false) {
+    static async changeSettings($settings: Partial<UserSettings>, onlyUpdateActiveTab = false) {
+        const promises = [];
         const prev = {...UserStorage.settings};
 
         UserStorage.set($settings);
@@ -448,7 +473,8 @@ export class Extension {
             this.onAppToggle();
         }
         if (prev.syncSettings !== UserStorage.settings.syncSettings) {
-            UserStorage.saveSyncSetting(UserStorage.settings.syncSettings);
+            const promise = UserStorage.saveSyncSetting(UserStorage.settings.syncSettings);
+            promises.push(promise);
         }
         if (this.isExtensionSwitchedOn() && $settings.changeBrowserTheme != null && prev.changeBrowserTheme !== $settings.changeBrowserTheme) {
             if ($settings.changeBrowserTheme) {
@@ -468,7 +494,9 @@ export class Extension {
                 chrome.contextMenus.removeAll();
             }
         }
-        this.onSettingsChanged(onlyUpdateActiveTab);
+        const promise = this.onSettingsChanged(onlyUpdateActiveTab);
+        promises.push(promise);
+        await Promise.all(promises);
     }
 
     private static setTheme($theme: Partial<FilterConfig>) {
@@ -557,12 +585,12 @@ export class Extension {
     //
     //----------------------
 
-    private static getURLInfo(url: string): TabInfo {
+    private static getTabInfo(tabURL: string): TabInfo {
         const {DARK_SITES} = ConfigManager;
-        const isInDarkList = isURLInList(url, DARK_SITES);
-        const isProtected = !canInjectScript(url);
+        const isInDarkList = isURLInList(tabURL, DARK_SITES);
+        const isProtected = !canInjectScript(tabURL);
         return {
-            url,
+            url: tabURL,
             isInDarkList,
             isProtected,
             isInjected: null,
@@ -570,19 +598,18 @@ export class Extension {
         };
     }
 
-    private static getTabMessage = (url: string, frameURL: string): TabData => {
+    private static getTabMessage = (tabURl: string, url: string, isTopFrame: boolean): TabData => {
         const settings = UserStorage.settings;
-        const urlInfo = this.getURLInfo(url);
-        if (this.isExtensionSwitchedOn() && isURLEnabled(url, settings, urlInfo)) {
-            const custom = settings.customThemes.find(({url: urlList}) => isURLInList(url, urlList));
-            const preset = custom ? null : settings.presets.find(({urls}) => isURLInList(url, urls));
+        const tabInfo = this.getTabInfo(tabURl);
+        if (this.isExtensionSwitchedOn() && isURLEnabled(tabURl, settings, tabInfo)) {
+            const custom = settings.customThemes.find(({url: urlList}) => isURLInList(tabURl, urlList));
+            const preset = custom ? null : settings.presets.find(({urls}) => isURLInList(tabURl, urls));
             let theme = custom ? custom.theme : preset ? preset.theme : settings.theme;
             if (this.autoState === 'scheme-dark' || this.autoState === 'scheme-light') {
                 const mode = this.autoState === 'scheme-dark' ? 1 : 0;
                 theme = {...theme, mode};
             }
-            const isIFrame = frameURL != null;
-            const detectDarkTheme = !isIFrame && settings.detectDarkTheme && !isURLInList(url, settings.siteListEnabled) && !isPDF(url);
+            const detectDarkTheme = isTopFrame && settings.detectDarkTheme && !isURLInList(tabURl, settings.siteListEnabled) && !isPDF(tabURl);
 
             logInfo(`Creating CSS for url: ${url}`);
             logInfo(`Custom theme ${custom ? 'was found' : 'was not found'}, Preset theme ${preset ? 'was found' : 'was not found'}
@@ -592,7 +619,7 @@ export class Extension {
                     return {
                         type: MessageType.BG_ADD_CSS_FILTER,
                         data: {
-                            css: createCSSFilterStylesheet(theme, url, frameURL, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
+                            css: createCSSFilterStylesheet(theme, url, isTopFrame, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
                             detectDarkTheme,
                         },
                     };
@@ -602,7 +629,7 @@ export class Extension {
                         return {
                             type: MessageType.BG_ADD_CSS_FILTER,
                             data: {
-                                css: createSVGFilterStylesheet(theme, url, frameURL, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
+                                css: createSVGFilterStylesheet(theme, url, isTopFrame, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
                                 detectDarkTheme,
                             },
                         };
@@ -610,7 +637,7 @@ export class Extension {
                     return {
                         type: MessageType.BG_ADD_SVG_FILTER,
                         data: {
-                            css: createSVGFilterStylesheet(theme, url, frameURL, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
+                            css: createSVGFilterStylesheet(theme, url, isTopFrame, ConfigManager.INVERSION_FIXES_RAW, ConfigManager.INVERSION_FIXES_INDEX),
                             svgMatrix: getSVGFilterMatrixValue(theme),
                             svgReverseMatrix: getSVGReverseFilterMatrixValue(),
                             detectDarkTheme,
@@ -623,19 +650,19 @@ export class Extension {
                         data: {
                             css: theme.stylesheet && theme.stylesheet.trim() ?
                                 theme.stylesheet :
-                                createStaticStylesheet(theme, url, frameURL, ConfigManager.STATIC_THEMES_RAW, ConfigManager.STATIC_THEMES_INDEX),
+                                createStaticStylesheet(theme, url, isTopFrame, ConfigManager.STATIC_THEMES_RAW, ConfigManager.STATIC_THEMES_INDEX),
                             detectDarkTheme: settings.detectDarkTheme,
                         },
                     };
                 }
                 case ThemeEngine.dynamicTheme: {
-                    const fixes = getDynamicThemeFixesFor(url, frameURL, ConfigManager.DYNAMIC_THEME_FIXES_RAW, ConfigManager.DYNAMIC_THEME_FIXES_INDEX, UserStorage.settings.enableForPDF);
+                    const fixes = getDynamicThemeFixesFor(url, isTopFrame, ConfigManager.DYNAMIC_THEME_FIXES_RAW, ConfigManager.DYNAMIC_THEME_FIXES_INDEX, UserStorage.settings.enableForPDF);
                     return {
                         type: MessageType.BG_ADD_DYNAMIC_THEME,
                         data: {
                             theme,
                             fixes,
-                            isIFrame,
+                            isIFrame: !isTopFrame,
                             detectDarkTheme,
                         },
                     };
@@ -645,7 +672,7 @@ export class Extension {
             }
         }
 
-        logInfo(`Site is not inverted: ${url}`);
+        logInfo(`Site is not inverted: ${tabURl}`);
         return {
             type: MessageType.BG_CLEAN_UP,
         };

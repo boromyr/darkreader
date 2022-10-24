@@ -3,6 +3,7 @@ import {Button, CheckBox, TextBox, TimeRangePicker} from '../../../controls';
 import {getLocalMessage} from '../../../../utils/locales';
 import type {Automation, ExtWrapper} from '../../../../definitions';
 import {AutomationMode} from '../../../../utils/automation';
+import {isMatchMediaChangeEventListenerBuggy} from '../../../../utils/platform';
 
 type MoreToggleSettingsProps = ExtWrapper & {
     isExpanded: boolean;
@@ -151,6 +152,11 @@ export default function MoreToggleSettings({data, actions, isExpanded, onClose}:
                 <p class="header__app-toggle__more-settings__description">
                     {getLocalMessage('system_dark_mode_description')}
                 </p>
+                {!isMatchMediaChangeEventListenerBuggy ? null :
+                    <p class="header__app-toggle__more-settings__warning">
+                        {getLocalMessage('system_dark_mode_chromium_warning')}
+                    </p>
+                }
             </div>
         </div>
     );
