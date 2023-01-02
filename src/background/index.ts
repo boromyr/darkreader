@@ -19,10 +19,6 @@ type TestMessage = {
     type: 'collectData';
     id: number;
 } | {
-    type: 'changeLocalStorage';
-    data: {[key: string]: string};
-    id: number;
-} | {
     type: 'getChromeStorage';
     data: {
         region: 'local' | 'sync';
@@ -35,13 +31,6 @@ type TestMessage = {
         region: 'local' | 'sync';
         data: {[key: string]: any};
     };
-    id: number;
-} | {
-    type: 'getLocalStorage';
-    id: number;
-} | {
-    type: 'setDataIsMigratedForTesting';
-    data: boolean;
     id: number;
 } | {
     type: 'getManifest';
@@ -120,7 +109,7 @@ if (__WATCH__) {
                     chrome.tabs.query({}, (tabs) => {
                         for (const tab of tabs) {
                             if (canInjectScript(tab.url)) {
-                                chrome.tabs.sendMessage<Message>(tab.id, {type: MessageType.BG_RELOAD});
+                                chrome.tabs.sendMessage<Message>(tab.id!, {type: MessageType.BG_RELOAD});
                             }
                         }
                         chrome.runtime.reload();
@@ -160,7 +149,7 @@ if (__TEST__) {
     socket.onmessage = (e) => {
         try {
             const message: TestMessage = JSON.parse(e.data);
-            const respond = (data?: ExtensionData | string | boolean | {[key: string]: string}) => socket.send(JSON.stringify({
+            const respond = (data?: ExtensionData | string | boolean | {[key: string]: string} | null) => socket.send(JSON.stringify({
                 data,
                 id: message.id,
             }));
@@ -172,17 +161,6 @@ if (__TEST__) {
                     break;
                 case 'collectData':
                     Extension.collectData().then(respond);
-                    break;
-                case 'changeLocalStorage': {
-                    const data = message.data;
-                    for (const key in data) {
-                        localStorage[key] = data[key];
-                    }
-                    respond();
-                    break;
-                }
-                case 'getLocalStorage':
-                    respond(localStorage ? JSON.stringify(localStorage) : null);
                     break;
                 case 'getManifest': {
                     const data = chrome.runtime.getManifest();
@@ -200,10 +178,6 @@ if (__TEST__) {
                     chrome.storage[region].get(keys, respond);
                     break;
                 }
-                case 'setDataIsMigratedForTesting':
-                    DevTools.setDataIsMigratedForTesting(message.data);
-                    respond();
-                    break;
             }
         } catch (err) {
             socket.send(JSON.stringify({error: String(err), original: e.data}));

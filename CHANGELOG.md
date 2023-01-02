@@ -1,3 +1,14 @@
+## 4.9.61 (Jan 2, 2023)
+
+- Only invert PDFs on mail.google.com and drive.google.com, if the setting for PDF inversion has been enabled. (#10310)
+- Show in the new UI design when a page is disabled, because it's protected by the browser. (#10338)
+- Improved restoring Dark Reader elements, when the whole DOM is being overwritten. (#10372)
+
+## 4.9.60 (Oct 27, 2022)
+
+- Fixed broken hotkeys.
+- Improved IP v6 address support.
+
 ## 4.9.59 (Oct 23, 2022)
 
 - Fixes a issue where `darkreader-fallback` wasn't removed from the DOM, when Dark Reader finds a `<meta name="darkreader-lock">` element.

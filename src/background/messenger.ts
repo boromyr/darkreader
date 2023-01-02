@@ -7,7 +7,6 @@ export interface ExtensionAdapter {
     collect: () => Promise<ExtensionData>;
     changeSettings: (settings: Partial<UserSettings>) => void;
     setTheme: (theme: Partial<FilterConfig>) => void;
-    setShortcut: ({command, shortcut}: {command: string; shortcut: string}) => void;
     markNewsAsRead: (ids: string[]) => Promise<void>;
     markNewsAsDisplayed: (ids: string[]) => Promise<void>;
     toggleActiveTab: () => void;
@@ -45,7 +44,7 @@ export default class Messenger {
             chrome.runtime.getURL('/ui/devtools/index.html'),
             chrome.runtime.getURL('/ui/stylesheet-editor/index.html')
         ];
-        if (allowedSenderURL.includes(sender.url)) {
+        if (allowedSenderURL.includes(sender.url!)) {
             this.onUIMessage(message, sendResponse);
             return ([
                 MessageType.UI_GET_DATA,
@@ -54,7 +53,7 @@ export default class Messenger {
     }
 
     private static firefoxPortListener(port: chrome.runtime.Port) {
-        let promise: Promise<ExtensionData | TabInfo>;
+        let promise: Promise<ExtensionData | TabInfo | null>;
         switch (port.name) {
             case MessageType.UI_GET_DATA:
                 promise = this.adapter.collect();
@@ -112,9 +111,6 @@ export default class Messenger {
             case MessageType.UI_SET_THEME:
                 this.adapter.setTheme(data);
                 break;
-            case MessageType.UI_SET_SHORTCUT:
-                this.adapter.setShortcut(data);
-                break;
             case MessageType.UI_TOGGLE_ACTIVE_TAB:
                 this.adapter.toggleActiveTab();
                 break;
@@ -129,7 +125,7 @@ export default class Messenger {
                 break;
             case MessageType.UI_APPLY_DEV_DYNAMIC_THEME_FIXES: {
                 const error = this.adapter.applyDevDynamicThemeFixes(data);
-                sendResponse({error: (error ? error.message : null)});
+                sendResponse({error: (error ? error.message : undefined)});
                 break;
             }
             case MessageType.UI_RESET_DEV_DYNAMIC_THEME_FIXES:
@@ -137,7 +133,7 @@ export default class Messenger {
                 break;
             case MessageType.UI_APPLY_DEV_INVERSION_FIXES: {
                 const error = this.adapter.applyDevInversionFixes(data);
-                sendResponse({error: (error ? error.message : null)});
+                sendResponse({error: (error ? error.message : undefined)});
                 break;
             }
             case MessageType.UI_RESET_DEV_INVERSION_FIXES:
@@ -145,7 +141,7 @@ export default class Messenger {
                 break;
             case MessageType.UI_APPLY_DEV_STATIC_THEMES: {
                 const error = this.adapter.applyDevStaticThemes(data);
-                sendResponse({error: error ? error.message : null});
+                sendResponse({error: error ? error.message : undefined});
                 break;
             }
             case MessageType.UI_RESET_DEV_STATIC_THEMES:
