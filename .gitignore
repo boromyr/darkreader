@@ -9,6 +9,10 @@ debug.log
 node_modules/
 .history/
 
+# Test results
+#-----------------------------------
+test-results-*.json
+
 # Code coverage reports
 #-----------------------------------
 tests/coverage/
@@ -30,3 +34,8 @@ coverage/
 # V8 Profiler logs
 #-----------------------------------
 isolate-*-v8.log
+
+# Deno
+#-----------------------------------
+deno.lock
+deno.json
