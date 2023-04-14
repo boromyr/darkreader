@@ -12,6 +12,10 @@ const colors = Object.entries({
     yellow: '\x1b[33m',
 }).reduce((map, [key, value]) => Object.assign(map, {[key]: (/** @type {string} */text) => `${value}${text}\x1b[0m`}), {});
 
+/**
+ * @param {string} command
+ * @returns {Promise<string>}
+ */
 export async function execute(command) {
     return new Promise((resolve, reject) => exec(command, (error, stdout) => {
         if (error) {
@@ -87,13 +91,17 @@ export async function copyFile(src, dest) {
 
 /**
  * @param {string} src
- * @param {BufferEncoding} encoding
+ * @param {BufferEncoding | null | undefined} encoding
  * @returns {Promise<string>}
  */
 export async function readFile(src, encoding = 'utf8') {
     return await fs.readFile(src, encoding);
 }
 
+/**
+ * @param {string} src
+ * @returns {Promise<boolean>}
+ */
 export async function fileExists(src) {
     try {
         await fs.access(src, fs.constants.R_OK);
@@ -106,7 +114,7 @@ export async function fileExists(src) {
 /**
  * @param {string} dest
  * @param {string} content
- * @param {BufferEncoding} encoding
+ * @param {BufferEncoding | null | undefined} encoding
  * @returns {Promise<void>}
  */
 export async function writeFile(dest, content, encoding = 'utf8') {
@@ -126,10 +134,11 @@ export async function readJSON(path) {
 /**
  * @param {string} dest
  * @param {string} content
+ * @param {string | number | undefined} space
  * @returns {Promise<void>}
  */
-export async function writeJSON(dest, content) {
-    const string = JSON.stringify(content, null, 4);
+export async function writeJSON(dest, content, space = 4) {
+    const string = JSON.stringify(content, null, space);
     return await writeFile(dest, string);
 }
 

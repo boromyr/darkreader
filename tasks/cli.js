@@ -11,6 +11,7 @@ import process from 'node:process';
 
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
+import {rm} from 'node:fs/promises';
 
 import {runTasks} from './task.js';
 import zip from './zip.js';
@@ -88,12 +89,13 @@ async function ensureGitClean() {
  * dependencies which is identical to already published version serves as a proof
  * that the published version was always free of (now known) vulnerabilities.
  *
- * @param {string} version The desired git version, e.g., 'v4.9.62' or 'v4.9.37.1'
+ * @param {string} version The desired git version, e.g., 'v4.9.63' or 'v4.9.37.1'
  * @param {boolean} fixVulnerabilities Whether of not to attempt to fix known vulnerabilities
  */
 async function checkoutVersion(version, fixVulnerabilities) {
     log.ok(`Checking out version ${version}`);
     // Use -- to disambiguate the tag (release version) and file paths
+    await rm('src', {force: true, recursive: true});
     await execute(`git checkout v${version} -- package.json package-lock.json src/ tasks/`);
     log.ok(`Installing dependencies`);
     await execute('npm install --ignore-scripts');
