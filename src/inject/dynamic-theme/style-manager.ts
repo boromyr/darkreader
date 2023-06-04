@@ -74,7 +74,7 @@ export function shouldManageStyle(element: Node | null): boolean {
     );
 }
 
-export function getManageableStyles(node: Node | null, results = [] as StyleElement[], deep = true) {
+export function getManageableStyles(node: Node | null, results: StyleElement[] = [], deep = true) {
     if (shouldManageStyle(node)) {
         results.push(node as StyleElement);
     } else if (node instanceof Element || (isShadowDomSupported && node instanceof ShadowRoot) || node === document) {
@@ -230,8 +230,8 @@ export function manageStyle(element: StyleElement, {update, loadingStart, loadin
             }
 
             if (
-                (!cssRules && !accessError && !isSafari) ||
                 (isSafari && !element.sheet) ||
+                (!isSafari && !cssRules && !accessError) ||
                 isStillLoadingError(accessError!)
             ) {
                 try {
