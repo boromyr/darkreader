@@ -1,3 +1,23 @@
+## 4.9.69 (November 21, 2023)
+
+- Separated Enabled and Disabled site lists.
+- Regular expressions support in Site List.
+- Fixed automation after computer waking up.
+
+## 4.9.68 (November 13, 2023)
+
+- Fixed incorrect CSS comment handling (Reddit issue #11583).
+- Fixed working on domains containing `constructor` part (#11877).
+
+## 4.9.67 (October 1, 2023)
+
+- Fixed Site List when there is any URL with port.
+
+## 4.9.66 (September 25, 2023)
+
+- Dynamic mode fixes.
+- UI improvements.
+
 ## 4.9.65 (August 7, 2023)
 
 - Optimize inline style handling (fixes DuckDuckGo issue).

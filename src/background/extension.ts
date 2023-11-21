@@ -8,7 +8,7 @@ import TabManager from './tab-manager';
 import UserStorage from './user-storage';
 import {setWindowTheme, resetWindowTheme} from './window-theme';
 import {getCommands, canInjectScript} from './utils/extension-api';
-import {isInTimeIntervalLocal, nextTimeInterval, isNightAtLocation, nextTimeChangeAtLocation} from '../utils/time';
+import {isInTimeIntervalLocal, nextTimeInterval, isNightAtLocation, nextTimeChangeAtLocation, getDuration} from '../utils/time';
 import {isURLInList, getURLHostOrProtocol, isURLEnabled, isPDF} from '../utils/url';
 import {ThemeEngine} from '../generators/theme-engines';
 import createCSSFilterStylesheet from '../generators/css-filter';
@@ -205,6 +205,25 @@ export class Extension {
         }
     }
 
+    private static wakeInterval: number = -1;
+
+    private static runWakeDetector() {
+        const WAKE_CHECK_INTERVAL = getDuration({minutes: 1});
+        const WAKE_CHECK_INTERVAL_ERROR = getDuration({seconds: 10});
+        if (this.wakeInterval >= 0) {
+            clearInterval(this.wakeInterval);
+        }
+
+        let lastRun = Date.now();
+        this.wakeInterval = setInterval(() => {
+            const now = Date.now();
+            if (now - lastRun > WAKE_CHECK_INTERVAL + WAKE_CHECK_INTERVAL_ERROR) {
+                Extension.handleAutomationCheck();
+            }
+            lastRun = now;
+        }, WAKE_CHECK_INTERVAL);
+    }
+
     public static async start(): Promise<void> {
         Extension.init();
         await Promise.all([
@@ -226,6 +245,7 @@ export class Extension {
             await ConfigManager.load({local: false});
         }
         Extension.updateAutoState();
+        Extension.runWakeDetector();
         Extension.onAppToggle();
         logInfo('loaded', UserStorage.settings);
 
@@ -565,15 +585,21 @@ export class Extension {
             return list;
         }
 
-        const darkThemeDetected = !settings.applyToListedOnly && settings.detectDarkTheme && tab.isDarkThemeDetected;
-        if (isInDarkList || darkThemeDetected || settings.siteListEnabled.includes(host)) {
-            const toggledList = getToggledList(settings.siteListEnabled);
-            Extension.changeSettings({siteListEnabled: toggledList}, true);
+        const darkThemeDetected = settings.enabledByDefault && settings.detectDarkTheme && tab.isDarkThemeDetected;
+        if (!settings.enabledByDefault || isInDarkList || darkThemeDetected) {
+            const toggledList = getToggledList(settings.enabledFor);
+            Extension.changeSettings({enabledFor: toggledList}, true);
+            return;
+        }
+        if (settings.enabledByDefault && settings.enabledFor.includes(host)) {
+            const enabledFor = getToggledList(settings.enabledFor);
+            const disabledFor = getToggledList(settings.disabledFor);
+            Extension.changeSettings({enabledFor, disabledFor}, true);
             return;
         }
 
-        const toggledList = getToggledList(settings.siteList);
-        Extension.changeSettings({siteList: toggledList}, true);
+        const toggledList = getToggledList(settings.disabledFor);
+        Extension.changeSettings({disabledFor: toggledList}, true);
     }
 
     //------------------------------------
@@ -627,18 +653,18 @@ export class Extension {
         };
     }
 
-    private static getTabMessage = (tabURl: string, url: string, isTopFrame: boolean): TabData => {
+    private static getTabMessage = (tabURL: string, url: string, isTopFrame: boolean): TabData => {
         const settings = UserStorage.settings;
-        const tabInfo = Extension.getTabInfo(tabURl);
-        if (Extension.isExtensionSwitchedOn() && isURLEnabled(tabURl, settings, tabInfo)) {
-            const custom = settings.customThemes.find(({url: urlList}) => isURLInList(tabURl, urlList));
-            const preset = custom ? null : settings.presets.find(({urls}) => isURLInList(tabURl, urls));
+        const tabInfo = Extension.getTabInfo(tabURL);
+        if (Extension.isExtensionSwitchedOn() && isURLEnabled(tabURL, settings, tabInfo)) {
+            const custom = settings.customThemes.find(({url: urlList}) => isURLInList(tabURL, urlList));
+            const preset = custom ? null : settings.presets.find(({urls}) => isURLInList(tabURL, urls));
             let theme = custom ? custom.theme : preset ? preset.theme : settings.theme;
             if (Extension.autoState === 'scheme-dark' || Extension.autoState === 'scheme-light') {
                 const mode = Extension.autoState === 'scheme-dark' ? 1 : 0;
                 theme = {...theme, mode};
             }
-            const detectDarkTheme = isTopFrame && settings.detectDarkTheme && !isURLInList(tabURl, settings.siteListEnabled) && !isPDF(tabURl);
+            const detectDarkTheme = isTopFrame && settings.detectDarkTheme && !isURLInList(tabURL, settings.enabledFor) && !isPDF(tabURL);
 
             logInfo(`Creating CSS for url: ${url}`);
             logInfo(`Custom theme ${custom ? 'was found' : 'was not found'}, Preset theme ${preset ? 'was found' : 'was not found'}
@@ -701,7 +727,7 @@ export class Extension {
             }
         }
 
-        logInfo(`Site is not inverted: ${tabURl}`);
+        logInfo(`Site is not inverted: ${tabURL}`);
         return {
             type: MessageTypeBGtoCS.CLEAN_UP,
         };
