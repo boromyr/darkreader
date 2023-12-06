@@ -215,6 +215,13 @@ export interface InversionFix {
     css: string;
 }
 
+export interface DetectorHint {
+    url: string[];
+    target: string;
+    match: string[];
+    noDarkTheme: boolean;
+}
+
 export interface StaticTheme {
     url: string[];
     neutralBg?: string[];
