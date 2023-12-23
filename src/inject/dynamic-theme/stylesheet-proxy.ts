@@ -44,6 +44,7 @@ export function injectProxy(enableStyleSheetsProxy: boolean, enableCustomElement
         Object.defineProperty(CSSStyleSheet.prototype, 'removeRule', removeRuleDescriptor!);
         document.removeEventListener('__darkreader__cleanUp', cleanUp);
         document.removeEventListener('__darkreader__addUndefinedResolver', addUndefinedResolver);
+        document.removeEventListener('__darkreader__blobURLCheckRequest', checkBlobURLSupport);
         if (enableStyleSheetsProxy) {
             Object.defineProperty(Document.prototype, 'styleSheets', documentStyleSheetsDescriptor!);
         }
@@ -68,6 +69,7 @@ export function injectProxy(enableStyleSheetsProxy: boolean, enableCustomElement
 
     document.addEventListener('__darkreader__cleanUp', cleanUp, {passive: true});
     document.addEventListener('__darkreader__addUndefinedResolver', addUndefinedResolver, {passive: true});
+    document.addEventListener('__darkreader__blobURLCheckRequest', checkBlobURLSupport, {once: true});
 
     const updateSheetEvent = new Event('__darkreader__updateSheet');
 
@@ -170,6 +172,29 @@ export function injectProxy(enableStyleSheetsProxy: boolean, enableCustomElement
         return Object.setPrototypeOf([...childNodes].filter((element: ChildNode) => {
             return !(element as HTMLElement).classList || !(element as HTMLElement).classList.contains('darkreader');
         }), NodeList.prototype);
+    }
+
+    async function checkBlobURLSupport(): Promise<void> {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="transparent"/></svg>';
+        const bytes = new Uint8Array(svg.length);
+        for (let i = 0; i < svg.length; i++) {
+            bytes[i] = svg.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {type: 'image/svg+xml'});
+        const objectURL = URL.createObjectURL(blob);
+        let blobURLAllowed: boolean;
+        try {
+            const image = new Image();
+            await new Promise<void>((resolve, reject) => {
+                image.onload = () => resolve();
+                image.onerror = () => reject();
+                image.src = objectURL;
+            });
+            blobURLAllowed = true;
+        } catch (err) {
+            blobURLAllowed = false;
+        }
+        document.dispatchEvent(new CustomEvent('__darkreader__blobURLCheckResponse', {detail: {blobURLAllowed}}));
     }
 
     Object.defineProperty(CSSStyleSheet.prototype, 'addRule', Object.assign({}, addRuleDescriptor, {value: proxyAddRule}));

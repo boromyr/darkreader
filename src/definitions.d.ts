@@ -59,6 +59,10 @@ export interface ExtWrapper {
     actions: ExtensionActions;
 }
 
+export type ViewProps = ExtWrapper & {
+    fonts?: string[];
+};
+
 export interface Theme {
     mode: FilterMode;
     brightness: number;
@@ -220,6 +224,7 @@ export interface DetectorHint {
     target: string;
     match: string[];
     noDarkTheme: boolean;
+    systemTheme: boolean;
 }
 
 export interface StaticTheme {
