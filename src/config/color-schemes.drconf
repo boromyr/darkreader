@@ -66,6 +66,18 @@ text: #3b4252
 
 ================================
 
+One Dark
+
+DARK
+background: #282c34
+text: #abb2bf
+
+LIGHT
+background: #fafafa
+text: #383a42
+
+================================
+
 Rosé Pine
 
 DARK
@@ -75,6 +87,18 @@ text: #e0def4
 LIGHT
 background: #faf4ed
 text: #575279
+
+================================
+
+Selenized
+
+DARK
+background: #103c48
+text: #adbcbc
+
+LIGHT
+background: #fbf3db
+text: #53676d
 
 ================================
 
