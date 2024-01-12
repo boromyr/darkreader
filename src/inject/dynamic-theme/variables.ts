@@ -28,6 +28,7 @@ const VAR_TYPE_BGIMG = 1 << 3;
 export class VariablesStore {
     private varTypes = new Map<string, number>();
     private rulesQueue: CSSRuleList[] = [];
+    private inlineStyleQueue: CSSStyleDeclaration[] = [];
     private definedVars = new Set<string>();
     private varRefs = new Map<string, Set<string>>();
     private unknownColorVars = new Set<string>();
@@ -42,6 +43,7 @@ export class VariablesStore {
     public clear(): void {
         this.varTypes.clear();
         this.rulesQueue.splice(0);
+        this.inlineStyleQueue.splice(0);
         this.definedVars.clear();
         this.varRefs.clear();
         this.unknownColorVars.clear();
@@ -64,12 +66,18 @@ export class VariablesStore {
         this.rulesQueue.push(rules);
     }
 
+    public addInlineStyleForMatching(style: CSSStyleDeclaration): void {
+        this.inlineStyleQueue.push(style);
+    }
+
     public matchVariablesAndDependents(): void {
+        if (this.rulesQueue.length === 0 && this.inlineStyleQueue.length === 0) {
+            return;
+        }
         this.changedTypeVars.clear();
         this.initialVarTypes = new Map(this.varTypes);
         this.collectRootVariables();
-        this.collectVariablesAndVarDep(this.rulesQueue);
-        this.rulesQueue.splice(0);
+        this.collectVariablesAndVarDep();
         this.collectRootVarDependents();
 
         this.varRefs.forEach((refs, v) => {
@@ -328,27 +336,43 @@ export class VariablesStore {
         }
     }
 
-    // Because of the similar expensive task between the old `collectVariables`
-    // and `collectVarDependent`, we only want to do it once.
-    // This function should only do the same expensive task once
-    // and ensure that the result comes to the correct task.
-    // The task is either `inspectVariable` or `inspectVarDependent`.
-    private collectVariablesAndVarDep(ruleList: CSSRuleList[]) {
-        ruleList.forEach((rules) => {
+    private collectVariablesAndVarDep() {
+        this.rulesQueue.forEach((rules) => {
             iterateCSSRules(rules, (rule) => {
-                rule.style && iterateCSSDeclarations(rule.style, (property, value) => {
-                    if (isVariable(property)) {
-                        this.inspectVariable(property, value);
-                    }
-                    if (isVarDependant(value)) {
-                        this.inspectVarDependant(property, value);
-                    }
-                });
+                if (rule.style) {
+                    this.collectVarsFromCSSDeclarations(rule.style);
+                }
             });
+        });
+        this.inlineStyleQueue.forEach((style) => {
+            this.collectVarsFromCSSDeclarations(style);
+        });
+        this.rulesQueue.splice(0);
+        this.inlineStyleQueue.splice(0);
+    }
+
+    private collectVarsFromCSSDeclarations(style: CSSStyleDeclaration) {
+        iterateCSSDeclarations(style, (property, value) => {
+            if (isVariable(property)) {
+                this.inspectVariable(property, value);
+            }
+            if (isVarDependant(value)) {
+                this.inspectVarDependant(property, value);
+            }
         });
     }
 
+    private shouldProcessRootVariables() {
+        return (
+            this.rulesQueue.length > 0 &&
+            document.documentElement.getAttribute('style')?.includes('--')
+        );
+    }
+
     private collectRootVariables() {
+        if (!this.shouldProcessRootVariables()) {
+            return;
+        }
         iterateCSSDeclarations(document.documentElement.style, (property, value) => {
             if (isVariable(property)) {
                 this.inspectVariable(property, value);
@@ -396,6 +420,9 @@ export class VariablesStore {
     }
 
     private collectRootVarDependents() {
+        if (!this.shouldProcessRootVariables()) {
+            return;
+        }
         iterateCSSDeclarations(document.documentElement.style, (property, value) => {
             if (isVarDependant(value)) {
                 this.inspectVarDependant(property, value);
