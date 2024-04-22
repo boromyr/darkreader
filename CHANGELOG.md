@@ -1,3 +1,26 @@
+# 4.9.83 (April 10, 2024)
+
+- Reduced memory consumption.
+- Fixed iframes background colors.
+- Optimized CSS @import loading.
+
+# 4.9.82 (April 5, 2024)
+
+- Fixed performance issue when detecting @layer and @supports rules.
+- Improved border colors with CSS variables.
+- Leave iframes unchanged when dark theme is detected on a web page.
+
+## 4.9.81 (March 29, 2024)
+
+- Fixed performance degradation when computer wakes up from sleep mode.
+- Improved dark theme detection.
+- Support for CSS layers.
+- Support for color mixing functions.
+- Override author's scrollbar colors.
+- Override color-scheme CSS property.
+- Fixes for backgrounds with variable colors.
+- Dynamic mode bug fixes and performance optimizations.
+
 ## 4.9.80 (March 13, 2024)
 
 - Analyze inline background images for root elements.

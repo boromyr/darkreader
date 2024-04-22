@@ -459,9 +459,9 @@ export class Extension {
         };
     }
 
-    private static async getConnectionMessage(tabURL: string, url: string, isTopFrame: boolean) {
+    private static async getConnectionMessage(tabURL: string, url: string, isTopFrame: boolean, topFrameHasDarkTheme?: boolean) {
         await Extension.loadData();
-        return Extension.getTabMessage(tabURL, url, isTopFrame);
+        return Extension.getTabMessage(tabURL, url, isTopFrame, topFrameHasDarkTheme);
     }
 
     private static async loadData() {
@@ -474,7 +474,7 @@ export class Extension {
 
     private static onColorSchemeChange = async (isDark: boolean) => {
         if (Extension.wasLastColorSchemeDark === isDark) {
-            // If color scheme was already correct, we do not need to do anyhting
+            // If color scheme was already correct, we do not need to do anything
             return;
         }
         Extension.wasLastColorSchemeDark = isDark;
@@ -660,10 +660,10 @@ export class Extension {
         };
     }
 
-    private static getTabMessage = (tabURL: string, url: string, isTopFrame: boolean): TabData => {
+    private static getTabMessage = (tabURL: string, url: string, isTopFrame: boolean, topFrameHasDarkTheme?: boolean): TabData => {
         const settings = UserStorage.settings;
         const tabInfo = Extension.getTabInfo(tabURL);
-        if (Extension.isExtensionSwitchedOn() && isURLEnabled(tabURL, settings, tabInfo)) {
+        if (Extension.isExtensionSwitchedOn() && isURLEnabled(tabURL, settings, tabInfo) && !topFrameHasDarkTheme) {
             const custom = settings.customThemes.find(({url: urlList}) => isURLInList(tabURL, urlList));
             const preset = custom ? null : settings.presets.find(({urls}) => isURLInList(tabURL, urls));
             let theme = custom ? custom.theme : preset ? preset.theme : settings.theme;

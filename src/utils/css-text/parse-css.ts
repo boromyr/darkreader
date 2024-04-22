@@ -1,5 +1,6 @@
 import {getOpenCloseRange, splitExcluding} from '../text';
 import type {TextRange} from '../text';
+import {removeCSSComments} from './css-text';
 
 export interface ParsedDeclaration {
     property: string;
@@ -18,14 +19,16 @@ export interface ParsedAtRule {
     rules: Array<ParsedAtRule | ParsedStyleRule>;
 }
 
-export function parseCSS(cssText: string): Array<ParsedAtRule | ParsedStyleRule> {
+export type ParsedCSS = Array<ParsedAtRule | ParsedStyleRule>;
+
+export function parseCSS(cssText: string): ParsedCSS {
     cssText = removeCSSComments(cssText);
     cssText = cssText.trim();
     if (!cssText) {
         return [];
     }
 
-    const rules: Array<ParsedAtRule | ParsedStyleRule> = [];
+    const rules: ParsedCSS = [];
 
     // Find {...} ranges excluding inside of "...", [...] etc.
     const excludeRanges = getTokenExclusionRanges(cssText);
@@ -52,7 +55,7 @@ export function parseCSS(cssText: string): Array<ParsedAtRule | ParsedStyleRule>
             rules.push(rule);
         }
 
-        ruleStart = brackets.end + 1;
+        ruleStart = brackets.end;
     });
 
     return rules;
@@ -72,10 +75,6 @@ function getAllOpenCloseRanges(
         i = range.end;
     }
     return ranges;
-}
-
-function removeCSSComments(cssText: string) {
-    return cssText.trim().replace(/\/\*.*?\*\//g, '');
 }
 
 function getTokenExclusionRanges(cssText: string) {
@@ -109,4 +108,8 @@ function parseDeclarations(cssDeclarationsText: string) {
         }
     });
     return declarations;
+}
+
+export function isParsedStyleRule(rule: ParsedAtRule | ParsedStyleRule): rule is ParsedStyleRule {
+    return 'selectors' in rule;
 }

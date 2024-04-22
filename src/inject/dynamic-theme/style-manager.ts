@@ -1,10 +1,12 @@
 import type {Theme} from '../../definitions';
 import {forEach} from '../../utils/array';
+import {removeCSSComments} from '../../utils/css-text/css-text';
+import {loadAsText} from '../../utils/network';
 import {getMatches} from '../../utils/text';
 import {getAbsoluteURL, isRelativeHrefOnAbsolutePath} from '../../utils/url';
 import {watchForNodePosition, removeNode, iterateShadowHosts, addReadyStateCompleteListener} from '../utils/dom';
 import {logInfo, logWarn} from '../utils/log';
-import {replaceCSSRelativeURLsWithAbsolute, removeCSSComments, replaceCSSFontFace, getCSSURLValue, cssImportRegex, getCSSBaseBath} from './css-rules';
+import {replaceCSSRelativeURLsWithAbsolute, replaceCSSFontFace, getCSSURLValue, cssImportRegex, getCSSBaseBath} from './css-rules';
 import {bgFetch} from './network';
 import {createStyleSheetModifier} from './stylesheet-modifier';
 import {isShadowDomSupported, isSafari, isFirefox} from '../../utils/platform';
@@ -552,7 +554,11 @@ async function loadText(url: string) {
     if (url.startsWith('data:')) {
         return await (await fetch(url)).text();
     }
-    return await bgFetch({url, responseType: 'text', mimeType: 'text/css', origin: window.location.origin});
+    const parsedURL = new URL(url);
+    if (parsedURL.origin === location.origin) {
+        return await loadAsText(url, 'text/css', location.origin);
+    }
+    return await bgFetch({url, responseType: 'text', mimeType: 'text/css', origin: location.origin});
 }
 
 async function replaceCSSImports(cssText: string, basePath: string, cache = new Map<string, string>()) {
