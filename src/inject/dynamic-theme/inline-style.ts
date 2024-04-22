@@ -4,10 +4,11 @@ import {iterateCSSDeclarations} from './css-rules';
 import {getModifiableCSSDeclaration} from './modify-css';
 import type {CSSVariableModifier, ModifiedVarDeclaration} from './variables';
 import {variablesStore} from './variables';
-import type {FilterConfig} from '../../definitions';
+import type {Theme} from '../../definitions';
 import {isShadowDomSupported} from '../../utils/platform';
 import {getDuration} from '../../utils/time';
 import {throttle} from '../../utils/throttle';
+import {getAbsoluteURL} from '../../utils/url';
 
 interface Overrides {
     [cssProp: string]: {
@@ -97,7 +98,7 @@ const overridesList = Object.values(overrides);
 const normalizedPropList: Record<string, string> = {};
 overridesList.forEach(({cssProp, customProp}) => normalizedPropList[customProp] = cssProp);
 
-const INLINE_STYLE_ATTRS = ['style', 'fill', 'stop-color', 'stroke', 'bgcolor', 'color'];
+const INLINE_STYLE_ATTRS = ['style', 'fill', 'stop-color', 'stroke', 'bgcolor', 'color', 'background'];
 export const INLINE_STYLE_SELECTOR = INLINE_STYLE_ATTRS.map((attr) => `[${attr}]`).join(', ');
 
 export function getInlineOverrideStyle(): string {
@@ -167,7 +168,7 @@ function deepWatchForInlineStyles(
     }
 
     const treeObserver = createOptimizedTreeObserver(root, {
-        onMinorMutations: ({additions}) => {
+        onMinorMutations: (_root, {additions}) => {
             additions.forEach((added) => discoverNodes(added));
         },
         onHugeMutations: () => {
@@ -241,12 +242,12 @@ export function stopWatchingForInlineStyles(): void {
 }
 
 const inlineStyleCache = new WeakMap<HTMLElement, string>();
-const filterProps: Array<keyof FilterConfig> = ['brightness', 'contrast', 'grayscale', 'sepia', 'mode'];
+const themeProps: Array<keyof Theme> = ['brightness', 'contrast', 'grayscale', 'sepia', 'mode'];
 
-function getInlineStyleCacheKey(el: HTMLElement, theme: FilterConfig): string {
+function getInlineStyleCacheKey(el: HTMLElement, theme: Theme): string {
     return INLINE_STYLE_ATTRS
         .map((attr) => `${attr}="${el.getAttribute(attr)}"`)
-        .concat(filterProps.map((prop) => `${prop}="${theme[prop]}"`))
+        .concat(themeProps.map((prop) => `${prop}="${theme[prop]}"`))
         .join(' ');
 }
 
@@ -260,7 +261,7 @@ function shouldIgnoreInlineStyle(element: HTMLElement, selectors: string[]): boo
     return false;
 }
 
-export function overrideInlineStyle(element: HTMLElement, theme: FilterConfig, ignoreInlineSelectors: string[], ignoreImageSelectors: string[]): void {
+export function overrideInlineStyle(element: HTMLElement, theme: Theme, ignoreInlineSelectors: string[], ignoreImageSelectors: string[]): void {
     const cacheKey = getInlineStyleCacheKey(element, theme);
     if (cacheKey === inlineStyleCache.get(element)) {
         return;
@@ -309,11 +310,19 @@ export function overrideInlineStyle(element: HTMLElement, theme: FilterConfig, i
             mod.onTypeChange.addListener(setProps);
         }
 
-        function setAsyncValue(promise: Promise<string | null>) {
+        function setAsyncValue(promise: Promise<string | null>, sourceValue: string) {
             promise.then((value) => {
                 if (value && targetCSSProp === 'background' && value.startsWith('var(--darkreader-bg--')) {
                     setStaticValue(value);
                 }
+                if (value && targetCSSProp === 'background-image') {
+                    if ((element === document.documentElement || element === document.body) && value === sourceValue) {
+                        // Remove big bright backgrounds from root or body
+                        value = 'none';
+                    }
+                    setStaticValue(value);
+                }
+                inlineStyleCache.set(element, getInlineStyleCacheKey(element, theme));
             });
         }
 
@@ -321,7 +330,7 @@ export function overrideInlineStyle(element: HTMLElement, theme: FilterConfig, i
         if (typeof value === 'string') {
             setStaticValue(value);
         } else if (value instanceof Promise) {
-            setAsyncValue(value);
+            setAsyncValue(value, cssVal);
         } else if (typeof value === 'object') {
             setVarDeclaration(value);
         }
@@ -342,6 +351,12 @@ export function overrideInlineStyle(element: HTMLElement, theme: FilterConfig, i
             value = `#${value}`;
         }
         setCustomProp('background-color', 'background-color', value);
+    }
+
+    if ((element === document.documentElement || element === document.body) && element.hasAttribute('background')) {
+        const url = getAbsoluteURL(location.href, element.getAttribute('background') ?? '');
+        const value = `url("${url}")`;
+        setCustomProp('background-image', 'background-image', value);
     }
 
     // We can catch some link elements here, that are from `<link rel="mask-icon" color="#000000">`.
@@ -392,6 +407,9 @@ export function overrideInlineStyle(element: HTMLElement, theme: FilterConfig, i
         // Temporarily ignore background images due to the possible performance
         // issues and complexity of handling async requests.
         if (property === 'background-image' && value.includes('url')) {
+            if (element === document.documentElement || element === document.body) {
+                setCustomProp(property, property, value);
+            }
             return;
         }
         if (overrides.hasOwnProperty(property) || (property.startsWith('--') && !normalizedPropList[property])) {

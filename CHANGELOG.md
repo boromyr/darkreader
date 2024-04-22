@@ -1,3 +1,28 @@
+## 4.9.80 (March 13, 2024)
+
+- Analyze inline background images for root elements.
+- Support for "background" attribute.
+- Fixed performance for asynchronously resolved inline styles.
+- Fixed freezes and incorrect work on several websites.
+- Dev Tools: Formatting of CSS fixes.
+
+## 4.9.79 (February 29, 2024)
+
+- Use ES2020 for API bundle.
+
+## 4.9.78 (February 29, 2024)
+
+- Optimized Adopted Style Sheets changes handling.
+- Fixed watching for style/link element position changes.
+- Fixed processing large style elements loaded by chunks.
+- Fixed enabling the extension with a hotkey after it was disabled automatically.
+- Fixed sliders in mobile UI.
+
+## 4.9.77 (February 7, 2024)
+
+- Firefox: Fixed errors when Adopted Style Sheets were not present.
+- Fixed breaking on ::view-transition selectors (Airbnb issue).
+
 ## 4.9.76 (January 17, 2024)
 
 - Improved dark theme detection.

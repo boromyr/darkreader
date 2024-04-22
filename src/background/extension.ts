@@ -16,7 +16,7 @@ import {getDetectorHintsFor} from '../generators/detector-hints';
 import {getDynamicThemeFixesFor} from '../generators/dynamic-theme';
 import createStaticStylesheet from '../generators/static-theme';
 import {createSVGFilterStylesheet, getSVGFilterMatrixValue, getSVGReverseFilterMatrixValue} from '../generators/svg-filter';
-import type {ExtensionData, FilterConfig, Shortcuts, UserSettings, TabInfo, TabData, Command, DevToolsData} from '../definitions';
+import type {ExtensionData, Theme, Shortcuts, UserSettings, TabInfo, TabData, Command, DevToolsData} from '../definitions';
 import {isSystemDarkModeEnabled, runColorSchemeChangeDetector} from '../utils/media-query';
 import {isFirefox} from '../utils/platform';
 import {MessageTypeBGtoCS} from '../utils/message';
@@ -225,7 +225,7 @@ export class Extension {
         }, WAKE_CHECK_INTERVAL);
     }
 
-    public static async start(): Promise<void> {
+    static async start(): Promise<void> {
         Extension.init();
         await Promise.all([
             ConfigManager.load({local: true}),
@@ -294,7 +294,7 @@ export class Extension {
                 logInfo('Toggle command entered');
                 Extension.changeSettings({
                     enabled: !Extension.isExtensionSwitchedOn(),
-                    automation: {...UserStorage.settings.automation, ...{enable: false}},
+                    automation: {...UserStorage.settings.automation, ...{enabled: false}},
                 });
                 break;
             case 'addSite': {
@@ -390,7 +390,7 @@ export class Extension {
         return commands.reduce((map, cmd) => Object.assign(map, {[cmd.name!]: cmd.shortcut}), {} as Shortcuts);
     }
 
-    public static async collectData(): Promise<ExtensionData> {
+    static async collectData(): Promise<ExtensionData> {
         await Extension.loadData();
         const [
             news,
@@ -419,7 +419,7 @@ export class Extension {
         };
     }
 
-    public static async collectDevToolsData(): Promise<DevToolsData> {
+    static async collectDevToolsData(): Promise<DevToolsData> {
         const [
             dynamicFixesText,
             filterFixesText,
@@ -504,7 +504,7 @@ export class Extension {
         }
     };
 
-    public static async changeSettings($settings: Partial<UserSettings>, onlyUpdateActiveTab = false): Promise<void> {
+    static async changeSettings($settings: Partial<UserSettings>, onlyUpdateActiveTab = false): Promise<void> {
         const promises = [];
         const prev = {...UserStorage.settings};
 
@@ -550,7 +550,7 @@ export class Extension {
         await Promise.all(promises);
     }
 
-    private static setTheme($theme: Partial<FilterConfig>) {
+    private static setTheme($theme: Partial<Theme>) {
         UserStorage.set({theme: {...UserStorage.settings.theme, ...$theme}});
 
         if (Extension.isExtensionSwitchedOn() && UserStorage.settings.changeBrowserTheme) {
