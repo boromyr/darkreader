@@ -12,6 +12,7 @@
 
     &__wrapper {
         background-color: @color-back;
+        border-radius: @colorpicker-control-height / 2;
         display: inline-flex;
         flex-direction: column;
         left: 0;
@@ -30,6 +31,7 @@
     &__input {
         background-color: @color-control-active;
         border: none;
+        border-radius: @colorpicker-input-height / 2;
         box-sizing: border-box;
         color: @color-control-fore;
         height: @colorpicker-input-height;
@@ -43,6 +45,7 @@
     }
 
     &__preview {
+        border-radius: 50%;
         cursor: pointer;
         display: inline-block;
         height: @colorpicker-icon-size;
@@ -62,6 +65,7 @@
         background-position: 0 0;
         background-repeat: no-repeat;
         background-size: @colorpicker-icon-size;
+        border-radius: 50%;
         cursor: pointer;
         display: inline-block;
         height: @colorpicker-icon-size;
