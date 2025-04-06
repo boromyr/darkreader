@@ -1,3 +1,11 @@
+# 4.9.105 (February 25, 2025)
+
+- API: Fixed breaking ES5 builds.
+
+# 4.9.104 (February 19, 2025)
+
+- API: ES Module bundle.
+
 # 4.9.103 (February 17, 2025)
 
 - Added support for more color spaces (Tailwind 4 issues).
