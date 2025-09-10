@@ -1,3 +1,12 @@
+# 4.9.110 (July 16, 2025)
+
+- Fixed breaking certain websites (Bloomberg).
+- Fixed Google Maps inversion.
+
+# 4.9.109 (July 7, 2025)
+
+- Fixed API bundle error.
+
 # 4.9.108 (July 3, 2025)
 
 - Fixed crash when parsing invalid complex colors (Linkedin issue).
