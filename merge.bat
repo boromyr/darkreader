@@ -8,5 +8,5 @@ git pull upstream main
 @REM ncu -u
 @REM npm install --no-audit
 pause
-npm install  & npm run build & pause & xcopy "D:\Users\PC\Documents\GitHub\DarkReader\build\release\chrome-mv3" "C:\Users\PC\AppData\Local\Microsoft\Edge\User Data\Default\.extension\DarkReader\" /y /e & pause
+npm install  & npm run build & pause & xcopy "D:\Users\PC\Documents\GitHub\DarkReader\build\release\chrome-mv3" "C:\Users\PC\AppData\Local\Microsoft\Edge\.extension\DarkReader\" /y /e & pause
 @REM npm install  & npm run build & xcopy "D:\Users\PC\Documents\GitHub\DarkReader\build\release\chrome" "C:\Users\PC\AppData\Local\Microsoft\Edge\User Data\Default\.extension\DarkReader\" /y /e & minify.bat & pause
