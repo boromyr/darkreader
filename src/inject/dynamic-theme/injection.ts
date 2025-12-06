@@ -1,6 +1,10 @@
 const hostsBreakingOnStylePosition = [
+    'gogoprivate.com',
+    'gprivate.com',
+    'www.berlingske.dk',
     'www.bloomberg.com',
     'www.diffusioneshop.com',
+    'www.weekendavisen.dk',
     'zhale.me',
 ];
 
