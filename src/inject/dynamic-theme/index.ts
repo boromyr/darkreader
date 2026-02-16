@@ -22,7 +22,7 @@ import {modifyBackgroundColor, modifyBorderColor, modifyForegroundColor} from '.
 import {getModifiedUserAgentStyle, getModifiedFallbackStyle, cleanModificationCache, getSelectionColor} from './modify-css';
 import {clearColorPalette, getColorPalette, registerVariablesSheet, releaseVariablesSheet} from './palette';
 import type {StyleElement, StyleManager} from './style-manager';
-import {manageStyle, getManageableStyles, cleanLoadingLinks} from './style-manager';
+import {manageStyle, getManageableStyles, cleanLoadingLinks, setIgnoredCSSURLs} from './style-manager';
 import {injectProxy} from './stylesheet-proxy';
 import {variablesStore} from './variables';
 import {watchForStyleChanges, stopWatchingForStyleChanges} from './watch';
@@ -296,6 +296,8 @@ function createDynamicStyleOverrides() {
     inlineStyleElements.forEach((el: HTMLElement) => overrideInlineStyle(el, theme!, ignoredInlineSelectors, ignoredImageAnalysisSelectors));
     handleAdoptedStyleSheets(document);
     variablesStore.matchVariablesAndDependents();
+
+    tryInvertChromePDF();
 
     if (isFirefox) {
         type NodeSheet = {
@@ -621,6 +623,27 @@ function selectRelevantFix(documentURL: string, fixes: DynamicThemeFix[]): Dynam
     return relevantFixIndex ? combineFixes([fixes[0], fixes[relevantFixIndex]]) : fixes[0];
 }
 
+function tryInvertChromePDF() {
+    if (!document.body || !chrome.dom) {
+        return;
+    }
+
+    const root = chrome.dom.openOrClosedShadowRoot(document.body);
+    if (!root || !root.querySelector('link[href$="/pdf_embedder.css"]')) {
+        return;
+    }
+
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync('[type="application/pdf"] { filter: invert(1) contrast(0.9); }');
+    root.adoptedStyleSheets.push(sheet);
+    cleaners.push(() => {
+        const index = root.adoptedStyleSheets.indexOf(sheet);
+        if (index >= 0) {
+            root.adoptedStyleSheets.splice(index, 1);
+        }
+    });
+}
+
 /**
  * TODO: expose this function to API builds via src/api function enable()
  */
@@ -690,9 +713,11 @@ export function createOrUpdateDynamicThemeInternal(themeConfig: Theme, dynamicTh
     if (fixes) {
         ignoredImageAnalysisSelectors = Array.isArray(fixes.ignoreImageAnalysis) ? fixes.ignoreImageAnalysis : [];
         ignoredInlineSelectors = Array.isArray(fixes.ignoreInlineStyle) ? fixes.ignoreInlineStyle : [];
+        setIgnoredCSSURLs(Array.isArray(fixes.ignoreCSSUrl) ? fixes.ignoreCSSUrl : []);
     } else {
         ignoredImageAnalysisSelectors = [];
         ignoredInlineSelectors = [];
+        setIgnoredCSSURLs([]);
     }
 
     if (theme.immediateModify) {

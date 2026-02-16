@@ -1,3 +1,26 @@
+# 4.9.121 (February 10, 2026)
+
+- Fixed sites fixes indexing.
+
+# 4.9.120 (February 9, 2026)
+
+- IGNORE CSS URL config property.
+- Optimized site list search.
+- Optimized fixes search.
+- Optimized color parsing.
+- Optimized PDF URL check.
+- Fixed overriding background size and position.
+- Fixed analyzing images with URL encoding.
+- Fixed analyzing SVG icons with unset size.
+
+# 4.9.119 (January 14, 2026)
+
+- Optimized inline style changes.
+- Support Shadow DOM created from HTML templates.
+- Fixed Google Maps satellite view.
+- Fixed SVG icons with unset size or inherited colors.
+- Fixed font element color attribute values.
+
 # 4.9.118 (December 8, 2025)
 
 - Improved RGB colors support in CSS variables.
