@@ -79,7 +79,6 @@ export class Extension {
         }
         Extension.initialized = true;
 
-        DevTools.init(Extension.onSettingsChanged);
         Messenger.init(Extension.getMessengerAdapter());
         TabManager.init({
             getConnectionMessage: Extension.getConnectionMessage,
@@ -232,6 +231,7 @@ export class Extension {
     static async start(): Promise<void> {
         Extension.init();
         await TabManager.cleanState();
+        await DevTools.init(Extension.onSettingsChanged);
         await Promise.all([
             ConfigManager.load({local: true}),
             Extension.MV3syncSystemColorStateManager(null),
@@ -279,12 +279,8 @@ export class Extension {
             markNewsAsRead: Newsmaker.markAsRead,
             markNewsAsDisplayed: Newsmaker.markAsDisplayed,
             loadConfig: ConfigManager.load,
-            applyDevDynamicThemeFixes: DevTools.applyDynamicThemeFixes,
-            resetDevDynamicThemeFixes: DevTools.resetDynamicThemeFixes,
-            applyDevInversionFixes: DevTools.applyInversionFixes,
-            resetDevInversionFixes: DevTools.resetInversionFixes,
-            applyDevStaticThemes: DevTools.applyStaticThemes,
-            resetDevStaticThemes: DevTools.resetStaticThemes,
+            applyDevFixes: DevTools.applyFixes,
+            resetDevFixes: DevTools.resetFixes,
             startActivation: Extension.startActivation,
             resetActivation: Extension.resetActivation,
             hideHighlights: UIHighlights.hideHighlights,
@@ -428,18 +424,21 @@ export class Extension {
 
     static async collectDevToolsData(): Promise<DevToolsData> {
         const [
-            dynamicFixesText,
-            filterFixesText,
+            detector,
+            dynamic,
+            filter,
             staticThemesText,
         ] = await Promise.all([
+            DevTools.getDetectorHintsText(),
             DevTools.getDynamicThemeFixesText(),
             DevTools.getInversionFixesText(),
             DevTools.getStaticThemesText(),
         ]);
         return {
-            dynamicFixesText,
-            filterFixesText,
-            staticThemesText,
+            detector,
+            dynamic,
+            filter,
+            static: staticThemesText,
         };
     }
 
@@ -485,7 +484,7 @@ export class Extension {
             return;
         }
         Extension.wasLastColorSchemeDark = isDark;
-        Extension.MV3syncSystemColorStateManager(isDark);
+        await Extension.MV3syncSystemColorStateManager(isDark);
         await Extension.loadData();
         if (UserStorage.settings.automation.mode !== AutomationMode.SYSTEM) {
             return;
@@ -759,7 +758,7 @@ export class Extension {
                     };
                 }
                 case ThemeEngine.dynamicTheme: {
-                    const fixes = getDynamicThemeFixesFor(url, isTopFrame, ConfigManager.DYNAMIC_THEME_FIXES_RAW!, ConfigManager.DYNAMIC_THEME_FIXES_INDEX!, UserStorage.settings.enableForPDF);
+                    const fixes = getDynamicThemeFixesFor(url, ConfigManager.DYNAMIC_THEME_FIXES_RAW!, ConfigManager.DYNAMIC_THEME_FIXES_INDEX!, UserStorage.settings.enableForPDF);
                     return {
                         type: MessageTypeBGtoCS.ADD_DYNAMIC_THEME,
                         data: {

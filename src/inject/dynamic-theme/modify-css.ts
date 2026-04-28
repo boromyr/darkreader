@@ -79,10 +79,11 @@ export function getModifiableCSSDeclaration(
         property === 'stroke' ||
         property === 'stop-color'
     ) {
-        if (property.startsWith('border') && property !== 'border-color' && value === 'initial') {
+        if (property.startsWith('border') && property !== 'border-color' && (value === 'initial' || value === 'currentcolor')) {
             const borderSideProp = property.substring(0, property.length - 6);
             const borderSideVal = rule.style.getPropertyValue(borderSideProp);
-            if (borderSideVal.startsWith('0px') || borderSideVal === 'none') {
+            const borderStyleVal = rule.style.getPropertyValue('border-style');
+            if (borderSideVal.startsWith('0px') || borderSideVal === 'none' || borderStyleVal === 'none') {
                 property = borderSideProp;
                 modifier = borderSideVal;
             } else {
@@ -554,7 +555,7 @@ export function getBgImageModifier(
                 logInfo(`Dimming light image ${logSrc}`);
                 const dimmed = getFilteredImageURL(imageDetails, theme);
                 result = `url("${dimmed}")`;
-            } else if (theme.mode === 0 && isLight) {
+            } else if (theme.mode === 0 && isLight && imageDetails.dataURL) {
                 logInfo(`Applying filter to image ${logSrc}`);
                 const filtered = getFilteredImageURL(imageDetails, {...theme, brightness: clamp(theme.brightness - 10, 5, 200), sepia: clamp(theme.sepia + 10, 0, 100)});
                 result = `url("${filtered}")`;
