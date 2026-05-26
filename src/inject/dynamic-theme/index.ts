@@ -19,8 +19,9 @@ import {getStyleInjectionMode, injectStyleAway, removeStyleContainer} from './in
 import {overrideInlineStyle, getInlineOverrideStyle, watchForInlineStyles, stopWatchingForInlineStyles, INLINE_STYLE_SELECTOR} from './inline-style';
 import {changeMetaThemeColorWhenAvailable, restoreMetaThemeColor} from './meta-theme-color';
 import {modifyBackgroundColor, modifyBorderColor, modifyForegroundColor} from './modify-colors';
-import {getModifiedUserAgentStyle, getModifiedFallbackStyle, cleanModificationCache, getSelectionColor} from './modify-css';
+import {getModifiedUserAgentStyle, getModifiedFallbackStyle, cleanModificationCache, getSelectionColor, setFilterSelectorHandler} from './modify-css';
 import {clearColorPalette, getColorPalette, registerVariablesSheet, releaseVariablesSheet} from './palette';
+import {filterSelectors, cleanFilterSelectors, addFilterSelector} from './selectors';
 import type {StyleElement, StyleManager} from './style-manager';
 import {manageStyle, getManageableStyles, cleanLoadingLinks, setIgnoredCSSURLs} from './style-manager';
 import {injectProxy} from './stylesheet-proxy';
@@ -100,22 +101,103 @@ function injectStaticStyle(style: HTMLStyleElement, prevNode: Node | null, watch
     }
 }
 
+const scheduleInversionStyleUpdate = throttle(() => {
+    const invertStyle = document.head?.querySelector<HTMLStyleElement>('.darkreader--invert');
+    if (invertStyle) {
+        setInversionStyleValue(invertStyle);
+    }
+    shadowRootsWithOverrides.forEach((root) => {
+        const shadowInvertStyle = root.querySelector<HTMLStyleElement>('.darkreader--invert');
+        if (shadowInvertStyle) {
+            setInversionStyleValue(shadowInvertStyle);
+        }
+    });
+});
+
+setFilterSelectorHandler((selector, type) => {
+    const changed = addFilterSelector(selector, type);
+    if (changed) {
+        scheduleInversionStyleUpdate();
+    }
+});
+
 function setInversionStyleValue(invertStyle: HTMLStyleElement) {
-    if (fixes && Array.isArray(fixes.invert) && fixes.invert.length > 0) {
-        const filter = getCSSFilterValue({
-            ...theme!,
-            contrast: theme!.mode === 0 ? theme!.contrast : clamp(theme!.contrast - 10, 0, 100),
-        });
-        if (filter) {
-            invertStyle.textContent = [
-                `${fixes.invert.join(', ')} {`,
-                `    filter: ${filter} !important;`,
-                '}',
-            ].join('\n');
+    if (!theme) {
+        return;
+    }
+
+    const rules: string[] = [];
+
+    const appendRule = (selectors: string[], filter: string | null) => {
+        if (!filter || selectors.length === 0) {
             return;
         }
+        rules.push([
+            `${selectors.join(', ')} {`,
+            `    filter: ${filter} !important;`,
+            '}',
+        ].join('\n'));
+    };
+
+    const appendCounterInversion = (selectors: string[]) => {
+        if (theme!.mode === 0 || selectors.length === 0) {
+            return;
+        }
+        rules.push([
+            `${selectors.join(', ')} {`,
+            `    color: black !important;`,
+            '}',
+            `${selectors.map((s) => `${s} > *`).join(', ')} {`,
+            `    filter: invert(100%) hue-rotate(180deg) !important;`,
+            '}',
+        ].join('\n'));
+    };
+
+    const appendInversionCancellation = (selectors: string[]) => {
+        if (theme!.mode === 0 || selectors.length === 0) {
+            return;
+        }
+        rules.push([
+            `${selectors.join(', ')} {`,
+            `    filter: none !important;`,
+            `    color: var(--darkreader-neutral-text) !important;`,
+            '}',
+            `${selectors.map((s) => `${s} > *`).join(', ')} {`,
+            `    filter: none !important;`,
+            '}',
+        ].join('\n'));
+    };
+
+    if ((fixes && Array.isArray(fixes.invert) && fixes.invert.length > 0) || filterSelectors.invert.size > 0) {
+        const extraInversionSelectors = [...filterSelectors.invert];
+        const invertSelectors = [...(fixes?.invert ?? []), ...extraInversionSelectors];
+        const invertFilter = getCSSFilterValue({
+            ...theme,
+            contrast: theme.mode === 0 ? theme.contrast : clamp(theme.contrast - 10, 0, 100),
+        });
+        appendRule(invertSelectors, invertFilter);
+        appendCounterInversion(invertSelectors);
+        if (filterSelectors.none.size > 0) {
+            const noneSelectors = [...filterSelectors.none];
+            appendInversionCancellation(noneSelectors);
+            if (theme.mode === 1) {
+                const invertedChildSelectors: string[] = [];
+                noneSelectors.forEach((parent) => {
+                    invertSelectors.forEach((child) => invertedChildSelectors.push(`${parent} > ${child}`));
+                });
+                appendRule(invertedChildSelectors, invertFilter);
+            }
+        }
     }
-    invertStyle.textContent = '';
+    if (filterSelectors.dim.size > 0) {
+        appendRule([...filterSelectors.dim], getCSSFilterValue({
+            ...theme,
+            brightness: clamp(theme.brightness - 10, 5, 200),
+            sepia: clamp(theme.sepia + 10, 0, 100),
+        }));
+    }
+
+    invertStyle.textContent = rules.join('\n');
 }
 
 function createStaticStyleOverrides() {
@@ -511,6 +593,7 @@ function watchForUpdates() {
     });
 
     addDOMReadyListener(onDOMReady);
+    setupDocumentPiPFontFix();
 }
 
 function stopWatchingForUpdates() {
@@ -644,7 +727,6 @@ function tryInvertChromePDF() {
  * TODO: expose this function to API builds via src/api function enable()
  */
 export function createOrUpdateDynamicTheme(theme: Theme, dynamicThemeFixes: DynamicThemeFix[] | null, iframe: boolean): void {
-    setupDocumentPiPFontFix();
     const dynamicThemeFix = selectRelevantFix(document.location.href, dynamicThemeFixes);
 
     // Most websites will have only the generic fix applied ('*'), some will have generic fix and one site-specific fix (two in total),
@@ -810,8 +892,13 @@ function setupDocumentPiPFontFix(): void {
         return fontSheetRules.join('\n');
     }
 
-    function injectFontCSS(pipDoc: Document, fontCSS: string): void {
-        if (pipDoc.querySelector('.darkreader--font-fix')) {
+    function getPipDoc(): Document | null {
+        return (docPiP.window?.document as Document) ?? null;
+    }
+
+    function injectFontCSS(fontCSS: string): void {
+        const pipDoc = getPipDoc();
+        if (!pipDoc || pipDoc.querySelector('.darkreader--font-fix')) {
             return;
         }
         const style = pipDoc.createElement('style');
@@ -821,27 +908,38 @@ function setupDocumentPiPFontFix(): void {
         (pipDoc.head || pipDoc.documentElement).appendChild(style);
     }
 
+    function removeFontCSS(): void {
+        getPipDoc()?.querySelector('.darkreader--font-fix')?.remove();
+    }
+
     function onPiPEnter(): void {
-        const pipWindow = docPiP.window;
-        if (!pipWindow) {
+        const pipDoc = getPipDoc();
+        if (!pipDoc || pipDoc.querySelector('meta[name="darkreader-lock"]')) {
             return;
         }
         const fontCSS = collectFontSheetCSS();
         if (!fontCSS) {
             return;
         }
-        const pipDoc = pipWindow.document;
-        injectFontCSS(pipDoc, fontCSS);
+        injectFontCSS(fontCSS);
         const observer = new MutationObserver(() => {
-            injectFontCSS(pipDoc, fontCSS);
+            if (pipDoc.querySelector('meta[name="darkreader-lock"]')) {
+                observer.disconnect();
+                docPiP.removeEventListener('enter', onPiPEnter);
+                removeFontCSS();
+                return;
+            }
+            injectFontCSS(fontCSS);
         });
-        observer.observe(pipDoc, {childList: true, subtree: true});
-        pipWindow.addEventListener('unload', () => observer.disconnect());
+        observer.observe(pipDoc, {childList: true, subtree: true})
+        cleaners.push(() => observer.disconnect());
+        (docPiP.window as Window).addEventListener('unload', () => observer.disconnect());
     }
 
     docPiP.addEventListener('enter', onPiPEnter);
     cleaners.push(() => {
         docPiP.removeEventListener('enter', onPiPEnter);
+        removeFontCSS();
         pipListenerRegistered = false;
     });
 }
@@ -885,6 +983,7 @@ export function removeDynamicTheme(): void {
     adoptedStyleFallbacks.clear();
 
     metaObserver && metaObserver.disconnect();
+    scheduleInversionStyleUpdate.cancel();
 
     cleaners.forEach((clean) => clean());
     cleaners.splice(0);
@@ -893,6 +992,7 @@ export function removeDynamicTheme(): void {
 export function cleanDynamicThemeCache(): void {
     variablesStore.clear();
     parsedURLCache.clear();
+    cleanFilterSelectors();
     removeDocumentVisibilityListener();
     cancelRendering();
     stopWatchingForUpdates();
