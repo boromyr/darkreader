@@ -1,3 +1,14 @@
+# 4.9.127 (June 5, 2026)
+
+- Fixed high CPU usage for inline style background image variables.
+
+# 4.9.126 (June 3, 2026)
+
+- Optimized image inversion.
+- Improved dark theme detection.
+- Chrome: Fixed affecting Picture-in-Picture mode.
+- Firefox: Fixed adopted style sheets performance (Reddit issue).
+
 # 4.9.125 (April 28, 2026)
 
 - Detector Hints editor in Dev Tools.
