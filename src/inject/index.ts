@@ -14,7 +14,6 @@ import {createOrUpdateSVGFilter, removeSVGFilter} from './svg-filter';
 import {logWarn, logInfoCollapsed} from './utils/log';
 
 declare const __DEBUG__: boolean;
-declare const __PLUS__: boolean;
 declare const __TEST__: boolean;
 
 let unloaded = false;
@@ -25,6 +24,8 @@ declare const __CHROMIUM_MV2__: boolean;
 declare const __CHROMIUM_MV3__: boolean;
 declare const __THUNDERBIRD__: boolean;
 declare const __FIREFOX_MV2__: boolean;
+
+declare function cloneInto<T>(obj: T, scope: Window): T;
 
 // Identifier for this particular script instance. It is used as an alternative to chrome.runtime.MessageSender.documentId
 const scriptId = generateUID();
@@ -214,14 +215,15 @@ if (!__THUNDERBIRD__) {
     addEventListener('resume', onResume, {passive: true});
 }
 
-if (__PLUS__) {
-    if (location.origin === HOMEPAGE_URL) {
-        document.addEventListener('__darkreader_activate__', async (e) => {
-            const {email, key} = (e as CustomEvent).detail;
-            const result = await activateTheme(email, key);
-            document.dispatchEvent(new CustomEvent('__darkreader_activationResult__', {detail: {result}}));
-        }, {once: true});
-    }
+if (location.origin === HOMEPAGE_URL) {
+    document.addEventListener('__darkreader_activate__', async (e) => {
+        const {email, key} = (e as CustomEvent).detail;
+        const result = await activateTheme(email, key);
+        const detail = {result};
+        document.dispatchEvent(new CustomEvent('__darkreader_activationResult__', {
+            detail: __FIREFOX_MV2__ && typeof cloneInto === 'function' ? cloneInto(detail, window) : detail,
+        }));
+    }, {once: true});
 }
 
 if (__TEST__) {

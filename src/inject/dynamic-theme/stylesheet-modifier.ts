@@ -2,7 +2,7 @@ import type {Theme} from '../../definitions';
 import {isChromium} from '../../utils/platform';
 import {createAsyncTasksQueue} from '../../utils/throttle';
 
-import {iterateCSSRules, iterateCSSDeclarations, isMediaRule, isLayerRule, isStyleRule} from './css-rules';
+import {iterateCSSRules, iterateCSSDeclarations, isMediaRule, isLayerRule, isContainerRule, isStyleRule} from './css-rules';
 import {themeCacheKeys} from './modify-colors';
 import type {ModifiableCSSDeclaration, ModifiableCSSRule} from './modify-css';
 import {getModifiableCSSDeclaration} from './modify-css';
@@ -42,26 +42,26 @@ export interface CSSBuilder {
     };
 }
 
-let cssTextCounter = 0;
-const cssTextIds = new Map<string, string>();
-
-function getCSSTextKey(cssText: string) {
-    const existing = cssTextIds.get(cssText);
-    if (existing !== undefined) {
-        return existing;
-    }
-    let n = ++cssTextCounter;
-    let key = '';
-    do {
-        key = String.fromCharCode(n & 0xFFFF) + key;
-        n >>>= 16;
-    } while (n > 0);
-    cssTextIds.set(cssText, key);
-    return key;
-}
-
 export function createStyleSheetModifier(): StyleSheetModifier {
     let renderId = 0;
+
+    let cssTextCounter = 0;
+    const cssTextIds = new Map<string, string>();
+
+    function getCSSTextKey(cssText: string) {
+        const existing = cssTextIds.get(cssText);
+        if (existing !== undefined) {
+            return existing;
+        }
+        let n = ++cssTextCounter;
+        let key = '';
+        do {
+            key = String.fromCharCode(n & 0xFFFF) + key;
+            n >>>= 16;
+        } while (n > 0);
+        cssTextIds.set(cssText, key);
+        return key;
+    }
 
     function getStyleRuleKey(rule: CSSStyleRule) {
         let key = getCSSTextKey(rule.cssText);
@@ -70,6 +70,10 @@ export function createStyleSheetModifier(): StyleSheetModifier {
         }
         if (isLayerRule(rule.parentRule)) {
             key = `${getCSSTextKey(rule.parentRule.name)}{${key}}`;
+        }
+        if (isContainerRule(rule.parentRule)) {
+            const {containerName, containerQuery} = rule.parentRule;
+            key = `${getCSSTextKey(`${containerName} ${containerQuery}`)}{${key}}`;
         }
         return key;
     }
@@ -341,6 +345,13 @@ export function createStyleSheetModifier(): StyleSheetModifier {
                     const {name} = rule;
                     const index = parent.cssRules.length;
                     parent.insertRule(`@layer ${name} {}`, index);
+                    return parent.cssRules[index] as CSSBuilder;
+                }
+                if (isContainerRule(rule)) {
+                    const {containerName, containerQuery} = rule;
+                    const index = parent.cssRules.length;
+                    const query = containerName ? `${containerName} ${containerQuery}` : containerQuery;
+                    parent.insertRule(`@container ${query} {}`, index);
                     return parent.cssRules[index] as CSSBuilder;
                 }
                 return parent;
