@@ -3,7 +3,7 @@ import {launch} from 'puppeteer-core';
 import {WebSocketServer} from 'ws';
 
 import {generateHTMLCoverageReports} from './coverage.js';
-import {getChromePath, getFirefoxPath, chromeMV3ExtensionDebugDir, chromePlusExtensionDebugDir, firefoxExtensionDebugDir, getEdgePath} from './paths.js';
+import {getChromePath, getFirefoxPath, chromeMV3ExtensionDebugDir, chromeMV3PlusExtensionDebugDir, firefoxExtensionDebugDir, getEdgePath} from './paths.js';
 import {createTestServer, generateRandomId} from './server.js';
 
 const TEST_SERVER_PORT = 8891;
@@ -105,7 +105,7 @@ export default class CustomJestEnvironment extends TestEnvironment {
      * @returns {Promise<Browser>}
      */
     async launchEdge() {
-        const extensionDir = chromePlusExtensionDebugDir;
+        const extensionDir = chromeMV3PlusExtensionDebugDir;
         let executablePath;
         try {
             executablePath = await getEdgePath();
@@ -265,7 +265,7 @@ export default class CustomJestEnvironment extends TestEnvironment {
             return isDark ? 'dark' : 'light';
         };
 
-        global.pageUtils.evaluateScript = async (script) => await page.evaluate(script);
+        global.pageUtils.evaluateScript = async (script, ...args) => await page.evaluate(script, ...args);
 
         global.expectPageStyles = async (expect, expectations) => {
             if (!Array.isArray(expectations[0])) {
@@ -287,10 +287,11 @@ export default class CustomJestEnvironment extends TestEnvironment {
                 return;
             }
             await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: colorScheme}]);
-            if (global.product === 'edge') {
-                const page = await this.getChromiumMV2BackgroundPage();
-                await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: colorScheme}]);
-            }
+            // Switching Edge to MV3
+            // if (global.product === 'edge') {
+            //     const page = await this.getChromiumMV2BackgroundPage();
+            //     await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: colorScheme}]);
+            // }
         };
 
         global.loadTestPage = async (paths, gotoOptions) => {

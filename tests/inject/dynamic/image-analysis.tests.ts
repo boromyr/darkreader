@@ -3,6 +3,8 @@ import {DEFAULT_THEME} from '../../../src/defaults';
 import type {DynamicThemeFix} from '../../../src/definitions';
 import {createOrUpdateDynamicTheme, removeDynamicTheme} from '../../../src/inject/dynamic-theme';
 import {getImageDetails} from '../../../src/inject/dynamic-theme/image';
+import {resetChromeRuntimeMessageStub, stubBackgroundFetchResponse, stubChromeRuntimeMessage} from '../support/background-stub';
+import {getEchoURL} from '../support/echo-client';
 import {multiline, timeout, waitForEvent} from '../support/test-utils';
 
 const theme = {
@@ -26,6 +28,12 @@ function svgToDataURL(svg: string) {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
+function crossOriginImageURL(svg: string) {
+    const url = getEchoURL(svg, 'image/svg+xml');
+    stubBackgroundFetchResponse(url, svgToDataURL(svg));
+    return url;
+}
+
 function getSVGImageCSS(svg: string, width: number, height: number, selector: string) {
     return multiline(
         `${selector} {`,
@@ -44,11 +52,13 @@ const images = {
     darkIcon: multiline(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">',
         '    <rect fill="black" width="100%" height="100%" />',
+        '    <rect fill="#444" width="50%" height="50%" />',
         '</svg>',
     ),
     lightIcon: multiline(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8">',
         '    <rect fill="white" width="100%" height="100%" />',
+        '    <rect fill="#aaa" width="50%" height="50%" />',
         '</svg>',
     ),
     darkTransparentIcon: multiline(
@@ -64,11 +74,13 @@ const images = {
     largeDarkImage: multiline(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="1024" height="1024">',
         '    <rect fill="black" width="100%" height="100%" />',
+        '    <rect fill="#444" width="50%" height="50%" />',
         '</svg>',
     ),
     largeLightImage: multiline(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="1024" height="1024">',
         '    <rect fill="white" width="100%" height="100%" />',
+        '    <rect fill="#aaa" width="50%" height="50%" />',
         '</svg>',
     ),
 };
@@ -286,5 +298,82 @@ describe('IMAGE ANALYSIS', () => {
         createOrUpdateDynamicTheme(theme, null, false);
         await waitForEvent('__darkreader__test__asyncQueueComplete');
         expect(getComputedStyle(container.querySelector('h1')!).backgroundImage).toMatch(/^url\(""\), url\(""\), url\("blob:.*"\)$/);
+    });
+
+    describe('cross-origin images', () => {
+        let darkURL: string;
+        let lightURL: string;
+
+        beforeEach(() => {
+            stubChromeRuntimeMessage();
+            darkURL = crossOriginImageURL(images.darkTransparentIcon);
+            lightURL = crossOriginImageURL(images.lightTransparentIcon);
+        });
+        afterEach(() => resetChromeRuntimeMessageStub());
+
+        it('should apply filters to dark icons', async () => {
+            container.innerHTML = multiline(
+                '<style>',
+                '    i {',
+                `        background-image: url("${darkURL}");`,
+                '        background-repeat: no-repeat;',
+                '        background-size: 16px;',
+                '        display: inline-block;',
+                '        width: 16px;',
+                '        height: 16px;',
+                '    }',
+                '</style>',
+                '<h1>Icon <i></i></h1>',
+            );
+            createOrUpdateDynamicTheme(theme, null, false);
+            await waitForEvent('__darkreader__test__asyncQueueComplete');
+            const filter = getComputedStyle(container.querySelector('i')!).filter;
+            expect(filter).toBe('invert(1) hue-rotate(180deg) contrast(0.9)');
+        });
+
+        it('should not apply filters to light icons', async () => {
+            container.innerHTML = multiline(
+                '<style>',
+                '    i {',
+                `        background-image: url("${lightURL}");`,
+                '        background-repeat: no-repeat;',
+                '        background-size: 16px;',
+                '        display: inline-block;',
+                '        width: 16px;',
+                '        height: 16px;',
+                '    }',
+                '</style>',
+                '<h1>Icon <i></i></h1>',
+            );
+            createOrUpdateDynamicTheme(theme, null, false);
+            await waitForEvent('__darkreader__test__asyncQueueComplete');
+            const filter = getComputedStyle(container.querySelector('i')!).filter;
+            expect(filter).toBe('none');
+        });
+
+        it('should handle icons in @media correctly', async () => {
+            container.innerHTML = multiline(
+                '<style>',
+                '    i {',
+                `        background-image: url("${darkURL}");`,
+                '        background-repeat: no-repeat;',
+                '        background-size: 16px;',
+                '        display: inline-block;',
+                '        width: 16px;',
+                '        height: 16px;',
+                '    }',
+                '    @media (forced-colors: active) {',
+                '        i {',
+                `            background-image: url("${lightURL}");`,
+                '        }',
+                '    }',
+                '</style>',
+                '<h1>Icon <i></i></h1>',
+            );
+            createOrUpdateDynamicTheme(theme, null, false);
+            await waitForEvent('__darkreader__test__asyncQueueComplete');
+            const filter = getComputedStyle(container.querySelector('i')!).filter;
+            expect(filter).toBe('invert(1) hue-rotate(180deg) contrast(0.9)');
+        });
     });
 });
